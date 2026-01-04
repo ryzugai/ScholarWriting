@@ -13,7 +13,7 @@ export enum ReviewType {
 
 export type ScopusQuartile = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 
-export type SectionType = 'intro' | 'lr' | 'method' | 'analysis' | 'disc' | 'conc';
+export type SectionType = 'intro' | 'lr' | 'method' | 'analysis' | 'disc' | 'conc' | 'refs';
 
 export interface Paper {
   id: string;

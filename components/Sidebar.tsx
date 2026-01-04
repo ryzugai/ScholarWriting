@@ -15,7 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
   ];
 
   return (
-    <div className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0">
+    <div className="w-64 bg-white border-r border-slate-200 h-full flex flex-col shrink-0">
       <div className="p-6 border-b border-slate-100">
         <h1 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
           <span className="text-2xl">⚡</span> ScholarPulse
@@ -33,7 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
             }`}
           >
             <span className="text-xl">{item.icon}</span>
-            {item.label}
+            <span className="text-sm font-bold tracking-tight">{item.label}</span>
           </button>
         ))}
       </nav>
