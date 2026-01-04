@@ -8,9 +8,14 @@ interface CompositionProps {
 }
 
 const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
-  const [activeSection, setActiveSection] = useState<SectionType>('intro');
-  const [sections, setSections] = useState<Record<SectionType, string>>({
-    intro: '', lr: '', method: '', analysis: '', disc: '', conc: '', refs: ''
+  const [activeSection, setActiveSection] = useState<SectionType>(() => {
+    return (localStorage.getItem('scholar_active_section') as SectionType) || 'intro';
+  });
+  
+  const [sections, setSections] = useState<Record<SectionType, string>>(() => {
+    const saved = localStorage.getItem('scholar_sections');
+    if (saved) return JSON.parse(saved);
+    return { intro: '', lr: '', method: '', analysis: '', disc: '', conc: '', refs: '' };
   });
   
   const [loading, setLoading] = useState(false);
@@ -27,15 +32,24 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-save logic
+  useEffect(() => {
+    localStorage.setItem('scholar_sections', JSON.stringify(sections));
+    localStorage.setItem('scholar_active_section', activeSection);
+  }, [sections, activeSection]);
+
   useEffect(() => {
     if (initialContext) {
-      setSections(prev => ({
-        ...prev,
-        lr: initialContext.draft || initialContext.synthesis || prev.lr,
-        refs: initialContext.references || prev.refs,
-        analysis: initialContext.analysisResult ? 
-          `ANALISIS DATA:\nSummary: ${initialContext.analysisResult.summary}\nInsights: ${initialContext.analysisResult.insights.join(', ')}` : prev.analysis
-      }));
+      setSections(prev => {
+        const next = {
+          ...prev,
+          lr: initialContext.draft || initialContext.synthesis || prev.lr,
+          refs: initialContext.references || prev.refs,
+          analysis: initialContext.analysisResult ? 
+            `ANALISIS DATA:\nSummary: ${initialContext.analysisResult.summary}\nInsights: ${initialContext.analysisResult.insights.join(', ')}` : prev.analysis
+        };
+        return next;
+      });
     }
   }, [initialContext]);
 
@@ -44,15 +58,16 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
   };
 
   const getTargetText = () => {
-    const start = textareaRef.current?.selectionStart || 0;
-    const end = textareaRef.current?.selectionEnd || 0;
-    const selected = sections[activeSection].substring(start, end);
-    return { text: selected || sections[activeSection], isSelection: !!selected, start, end };
+    if (!textareaRef.current) return { text: sections[activeSection] || "", isSelection: false, start: 0, end: 0 };
+    const start = textareaRef.current.selectionStart || 0;
+    const end = textareaRef.current.selectionEnd || 0;
+    const selected = (sections[activeSection] || "").substring(start, end);
+    return { text: selected || sections[activeSection] || "", isSelection: !!selected, start, end };
   };
 
   const replaceTargetText = (newText: string, meta: any) => {
     if (meta.isSelection) {
-      const full = sections[activeSection];
+      const full = sections[activeSection] || "";
       const updated = full.substring(0, meta.start) + newText + full.substring(meta.end);
       handleUpdateSection(updated);
     } else {
@@ -64,9 +79,9 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
     if (!prompt) return;
     setLoading(true);
     try {
-      const contextStr = `Section: ${sectionLabels[activeSection]}\nCurrent: ${sections[activeSection]}\nTopic: ${initialContext?.topic || 'Research'}`;
+      const contextStr = `Section: ${sectionLabels[activeSection]}\nCurrent: ${sections[activeSection] || ""}\nTopic: ${initialContext?.topic || 'Research'}`;
       const response = await composeAcademicText(`[TARGET: Scopus ${quartile}] ${prompt}`, contextStr);
-      handleUpdateSection(sections[activeSection] + "\n\n" + response);
+      handleUpdateSection((sections[activeSection] || "") + "\n\n" + response);
       setPrompt('');
     } catch (error) { console.error(error); }
     finally { setLoading(false); }
@@ -94,7 +109,7 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
     setCitationSearchVisible(true);
     try {
       const res = await findCitations(keyword);
-      setCitations(res);
+      setCitations(res || []);
     } catch (error) { console.error(error); }
     finally { setLoading(false); }
   };
@@ -127,7 +142,6 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
         {/* Editor */}
         <div className="flex-[3] bg-white rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col min-h-0 overflow-hidden relative border-t-4 border-t-indigo-600">
           
-          {/* Main Toolbar */}
           <div className="shrink-0 px-6 py-3 bg-slate-50/50 border-b border-slate-100 flex flex-wrap gap-4 items-center justify-between backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <button onClick={() => handleToolAction('humanize')} disabled={loading} className="px-3 py-1.5 rounded-lg text-[9px] font-black bg-white border border-slate-200 text-indigo-600 hover:shadow-sm">✨ HUMANIZE</button>
@@ -150,7 +164,6 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Font Size */}
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] font-black text-slate-400">SIZE</span>
                 <select 
@@ -161,7 +174,6 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
                   {[14, 16, 18, 20, 24, 28, 32].map(s => <option key={s} value={s}>{s}px</option>)}
                 </select>
               </div>
-              {/* Alignment */}
               <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
                 {(['left', 'center', 'right', 'justify'] as const).map(align => (
                   <button 
@@ -183,7 +195,7 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
           <div className="flex-1 w-full relative min-h-0">
             <textarea
               ref={textareaRef}
-              value={sections[activeSection]}
+              value={sections[activeSection] || ""}
               onChange={(e) => handleUpdateSection(e.target.value)}
               style={{ fontSize: `${fontSize}px`, textAlign: textAlign }}
               className="absolute inset-0 w-full h-full p-10 md:p-14 lg:p-16 font-serif leading-[1.8] outline-none resize-none bg-white text-slate-800 placeholder:text-slate-200 transition-all"
@@ -201,7 +213,6 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
           )}
         </div>
 
-        {/* Sidebar */}
         <div className="flex-[1] flex flex-col gap-6 min-h-0 overflow-hidden min-w-[320px]">
           <div className="shrink-0 bg-indigo-600 p-6 rounded-[2rem] text-white shadow-lg space-y-4">
             <h4 className="font-black text-[9px] uppercase tracking-widest opacity-80 flex items-center gap-2"><span>✍️</span> Writing Assistant</h4>
@@ -232,8 +243,8 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
 
             <button onClick={async () => {
               setLoading(true);
-              const res = await getSuggestions(activeSection, sections[activeSection]);
-              setSuggestions(res);
+              const res = await getSuggestions(activeSection, sections[activeSection] || "");
+              setSuggestions(res || []);
               setLoading(false);
             }} className="w-full py-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 text-[9px] font-black uppercase hover:border-indigo-400 hover:text-indigo-600 transition-all">
                Generate Sentence Starters
@@ -244,7 +255,7 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
                 {suggestions.map((s, i) => (
                   <button 
                     key={i} 
-                    onClick={() => handleUpdateSection(sections[activeSection] + (sections[activeSection] ? " " : "") + s)}
+                    onClick={() => handleUpdateSection((sections[activeSection] || "") + (sections[activeSection] ? " " : "") + s)}
                     className="w-full text-left p-3 text-[10px] serif bg-white border border-slate-100 rounded-xl hover:bg-indigo-50 transition-all text-slate-600"
                   >
                     "{s}..."
@@ -256,7 +267,6 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
         </div>
       </div>
 
-      {/* Citation Modal */}
       {citationSearchVisible && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
@@ -265,12 +275,13 @@ const Composition: React.FC<CompositionProps> = ({ initialContext }) => {
               <button onClick={() => setCitationSearchVisible(false)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">✕</button>
             </div>
             <div className="p-6 overflow-y-auto space-y-3 bg-slate-50 flex-1 custom-scrollbar">
+              {citations.length === 0 && !loading && <p className="text-center py-10 text-slate-400 text-xs">Tiada sitasi ditemui.</p>}
               {citations.map((cite, i) => (
                 <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 group hover:border-indigo-300">
                   <p className="text-[11px] serif text-slate-700 leading-relaxed italic">{cite}</p>
                   <button 
                     onClick={() => {
-                      const updated = sections[activeSection] + (sections[activeSection] ? " " : "") + cite;
+                      const updated = (sections[activeSection] || "") + (sections[activeSection] ? " " : "") + cite;
                       handleUpdateSection(updated);
                       setCitationSearchVisible(false);
                     }}
