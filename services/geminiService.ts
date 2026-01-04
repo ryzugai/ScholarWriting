@@ -2,7 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Paper, AnalysisResult, CapturedDetails, ReviewType } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always use a named parameter for apiKey and fetch it directly from process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const TEMPLATE_KNOWLEDGE = `
 REAL FOUNDATION ARTICLES (Dr. Hayrol Azril Template):
@@ -26,6 +27,7 @@ CRITICAL FORMATTING RULES:
 `;
 
 export const searchLiterature = async (query: string, reviewType: ReviewType): Promise<{ papers: Paper[], text: string }> => {
+  // Use gemini-3-flash-preview for general text tasks
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Task: Conduct a ${reviewType} for the topic: ${query}. 
@@ -50,6 +52,7 @@ export const searchLiterature = async (query: string, reviewType: ReviewType): P
     },
   });
 
+  // Extract text output from response.text property
   let text = (response.text || "")
     .replace(/[#*]/g, '')
     .replace(/\n{3,}/g, '\n\n')
@@ -79,35 +82,45 @@ export const searchLiterature = async (query: string, reviewType: ReviewType): P
 };
 
 export const captureArticleDetails = async (url: string, title: string): Promise<CapturedDetails> => {
+  // When using googleSearch, avoid responseMimeType: "application/json" as per guidelines.
+  // Instead, we prompt for text and parse it or don't use search if we just want to analyze known text.
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Analyze article: ${title} (${url}). Extract methodology, 3 key findings, and APA 7th citation. ${CLEAN_TEXT_INSTRUCTION}`,
+    contents: `Analyze article: ${title} (${url}). Extract methodology, 3 key findings, and APA 7th citation. Return the data as a clean JSON block. ${CLEAN_TEXT_INSTRUCTION}`,
     config: {
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          methodology: { type: Type.STRING },
-          findings: { type: Type.ARRAY, items: { type: Type.STRING } },
-          limitations: { type: Type.STRING },
-          citation: { type: Type.STRING },
-          relevanceScore: { type: Type.NUMBER }
-        },
-        required: ["methodology", "findings", "limitations", "citation", "relevanceScore"]
-      }
+      tools: [{ googleSearch: {} }]
     }
   });
 
-  const data = JSON.parse(response.text.trim());
-  return JSON.parse(JSON.stringify(data).replace(/[#*]/g, ''));
+  const text = response.text || "";
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : "{}";
+    const data = JSON.parse(jsonStr);
+    return {
+      methodology: (data.methodology || "N/A").replace(/[#*]/g, ''),
+      findings: (data.findings || []).map((f: string) => f.replace(/[#*]/g, '')),
+      limitations: (data.limitations || "N/A").replace(/[#*]/g, ''),
+      citation: (data.citation || "N/A").replace(/[#*]/g, ''),
+      relevanceScore: data.relevanceScore || 0
+    };
+  } catch (e) {
+    return {
+      methodology: "Error parsing details",
+      findings: ["Check article link manually"],
+      limitations: "N/A",
+      citation: title,
+      relevanceScore: 0
+    };
+  }
 };
 
 export const composeAcademicText = async (prompt: string, context: string): Promise<string> => {
+  // Use gemini-3-pro-preview for complex reasoning and set a thinking budget.
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Context: ${context}\nTask: ${prompt}. ${CLEAN_TEXT_INSTRUCTION}`,
-    config: { thinkingConfig: { thinkingBudget: 2000 } }
+    config: { thinkingConfig: { thinkingBudget: 4000 } }
   });
   return (response.text || "").replace(/[#*]/g, '');
 };
@@ -131,11 +144,10 @@ export const analyzeData = async (data: string): Promise<AnalysisResult> => {
       }
     }
   });
-  const result = JSON.parse(response.text.trim());
+  const jsonStr = response.text.trim();
+  const result = JSON.parse(jsonStr);
   return JSON.parse(JSON.stringify(result).replace(/[#*]/g, ''));
 };
-
-/** ACADEMIC WRITING UTILITIES **/
 
 export const humanizeText = async (text: string): Promise<string> => {
   const response = await ai.models.generateContent({
@@ -169,17 +181,15 @@ export const getSuggestions = async (section: string, currentText: string): Prom
 };
 
 export const findCitations = async (keyword: string): Promise<string[]> => {
+  // Remove responseMimeType when using googleSearch as per guidelines.
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Find real academic papers (Title, Authors, Year, Journal) for the following research keyword: ${keyword}. Return as a list of APA citations.`,
+    contents: `Find real academic papers (Title, Authors, Year, Journal) for the following research keyword: ${keyword}. Return as a simple list of APA citations, one per line.`,
     config: {
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING }
-      }
+      tools: [{ googleSearch: {} }]
     }
   });
-  return JSON.parse(response.text.trim());
+  
+  const text = response.text || "";
+  return text.split('\n').filter(line => line.trim().length > 10).map(line => line.replace(/^[-\d\.\s]+/, '').trim());
 };

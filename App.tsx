@@ -49,7 +49,7 @@ const App: React.FC = () => {
     <div className="h-screen w-screen bg-slate-50 flex overflow-hidden">
       <Sidebar currentView={view} setView={setView} />
       
-      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
         {/* Header Tetap */}
         <header className="shrink-0 flex justify-between items-center p-6 bg-white border-b border-slate-100 z-10 shadow-sm">
           <div>
@@ -70,8 +70,8 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Area Konten Utama - Menggunakan flex-1 dan min-h-0 untuk memastikan anak-anak mengisi ruang */}
-        <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col p-4 md:p-6 lg:p-8">
+        {/* Area Konten Utama */}
+        <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col px-4 md:px-6 lg:px-8 py-2">
           <div className="flex-1 min-h-0 w-full max-w-[1800px] mx-auto">
             {renderContent()}
           </div>
