@@ -1,0 +1,7 @@
+{
+  "name": "ScholarPulse AI",
+  "description": "An all-in-one research assistant for literature review, academic writing with real citations, and intelligent data analysis powered by Gemini 3.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
